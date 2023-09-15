@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://b1qd8npaiqe0q"]
+
+[ext_resource type="PackedScene" uid="uid://165lv0ikxbxc" path="res://scenes/block/block.tscn" id="1_g6b6g"]
+
+[node name="BlockBlue" instance=ExtResource("1_g6b6g")]
+_color = "blue"
+
+[node name="ColorRect" parent="." index="0"]
+color = Color(0.0156863, 0.14902, 0.831373, 1)

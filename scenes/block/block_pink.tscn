@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3 uid="uid://cordoi6e8777b"]
+
+[ext_resource type="PackedScene" uid="uid://165lv0ikxbxc" path="res://scenes/block/block.tscn" id="1_lnv7h"]
+
+[node name="BlockPink" instance=ExtResource("1_lnv7h")]
+_color = "pink"
+
+[node name="ColorRect" parent="." index="0"]
+color = Color(0.933333, 0.309804, 0.905882, 1)
