@@ -1,9 +1,14 @@
 extends Node2D
 
-enum Mouse_Input{
+enum Mouse_Input {
 	PRESS,
 	RELEASE,
 	NONE,
+}
+
+enum GameState {
+	DISPLAY_UPDATE,
+	WAITING_INPUT
 }
 
 #最大列数
@@ -13,6 +18,8 @@ const HEIGHT: int = 7
 
 const OFFSET: int = 70
 const Y_OFFSET: int = -2
+
+var game_state: GameState = GameState.WAITING_INPUT
 
 
 #Blockを配置しない座標を集めた配列
@@ -46,6 +53,8 @@ var _is_press: bool = false
 	preload("res://scenes/block/block_red.tscn"),
 	preload("res://scenes/block/block_yellow.tscn"),
 ]
+
+var font = preload("res://font/SourceCodePro-Bold.ttf")
 
 
 func _ready()->void:
@@ -113,18 +122,28 @@ func is_in_grid(grid_position: Vector2i)->bool:
 
 
 func _process(_delta)->void:
-	if touch_input() == Mouse_Input.RELEASE:
+	
+	if game_state == GameState.WAITING_INPUT && touch_input() == Mouse_Input.RELEASE:
+		game_state = GameState.DISPLAY_UPDATE
 		var direction := touch_difference(_pressed_grid, _released_grid)
-		
+		queue_redraw()
 		await swap_blocks(_pressed_grid.x, _pressed_grid.y, direction)
-		
+		queue_redraw()
 		if find_matches() == false:
 			await swap_blocks(_pressed_grid.x, _pressed_grid.y, direction)
+			game_state = GameState.WAITING_INPUT
+			queue_redraw()
 			return
-		
+
 		await transparent_matched_block()
+		queue_redraw()
 		delete_matched_block()
+		
 		await fall_blocks()
+		queue_redraw()
+		await refill_blocks()
+		queue_redraw()
+		game_state = GameState.WAITING_INPUT
 		
 		
 		
@@ -170,11 +189,9 @@ func swap_blocks(column: int, row: int, direction: Vector2i)->void:
 		all_blocks[column][row] = other_block
 		all_blocks[column + direction.x][row + direction.y] = first_block
 		
-		var tween := get_tree().create_tween()
+		var tween := create_tween().set_parallel(true)
 		tween.tween_property(first_block, 'position', grid_to_pixel(column + direction.x, row + direction.y), 0.2)
-		tween.parallel()
 		tween.tween_property(other_block, 'position', grid_to_pixel(column, row), 0.2)
-		tween.play()
 		await tween.finished
 		
 		
@@ -202,14 +219,12 @@ func find_matches()->bool:
 	
 
 func transparent_matched_block()->void:
-	var tween := get_tree().create_tween()
+	var tween := create_tween().set_parallel(true)
 	
 	for i_c in WIDTH:
 		for i_r in HEIGHT:
 			if all_blocks[i_c][i_r] != null && all_blocks[i_c][i_r].get_matched() == true:
-				tween.parallel()
 				tween.tween_property(all_blocks[i_c][i_r].color_rect, 'modulate', Color(1, 1, 1, 0), 0.2)
-	tween.play()
 	await tween.finished
 
 
@@ -219,22 +234,73 @@ func delete_matched_block()->void:
 			if all_blocks[i_c][i_r] != null && all_blocks[i_c][i_r].get_matched() == true:
 				all_blocks[i_c][i_r].queue_free
 				all_blocks[i_c][i_r] = null
+
 				
 				
 #削除されて空いた空間に上にあるBlockを下に詰める
 func fall_blocks()->void:
-	var tween := get_tree().create_tween()
+	var tween := create_tween().set_parallel(true)
+	var need_tween: bool = false
+
 	for i_c in WIDTH:
 		for i_r in HEIGHT:
 			if all_blocks[i_c][i_r] == null && !empty_grids.has(Vector2i(i_c,i_r)):
 				for j_r in range(i_r + 1, HEIGHT):
 					if all_blocks[i_c][j_r] != null:
-						tween.parallel()
+						need_tween = true
 						tween.tween_property(all_blocks[i_c][j_r], 'position', grid_to_pixel(i_c, i_r), 0.2)
 						all_blocks[i_c][i_r] = all_blocks[i_c][j_r]
 						all_blocks[i_c][j_r] = null
 						break
-	tween.play()
+						
+	if need_tween:
+		await tween.finished
+	else:
+		tween.kill()
+
+
+#Blockを下に詰めた際に上に生じた空間にBlockを補充する
+func refill_blocks()->void:
+	var tween := create_tween().set_parallel(true)
+	for i_c in WIDTH:
+		for i_r in HEIGHT:
+			if all_blocks[i_c][i_r] == null && !empty_grids.has(Vector2i(i_c,i_r)):
+				var block_instance: Block = spawn_block_list.pick_random().instantiate()
+				var loops = 0
+				while (match_at(i_c, i_r, block_instance.get_color()) && loops < 100):
+					loops += 1
+					block_instance = spawn_block_list.pick_random().instantiate()
+				add_child(block_instance)
+				block_instance.position = grid_to_pixel(i_c, i_r - Y_OFFSET)
+				tween.tween_property(block_instance, 'position', grid_to_pixel(i_c, i_r), 0.2)
+				all_blocks[i_c][i_r] = block_instance
 	await tween.finished
 
+
+func _draw():
+	_draw_blocks()
+
+
+func _draw_blocks()->void:
+	var _text: String = ""
+	for i_c in WIDTH:
+		for i_r in HEIGHT:
+			if empty_grids.has(Vector2i(i_c,i_r)):
+				continue
+			if all_blocks[i_c][i_r] == null:
+				_text = "N"
+			else:
+				match all_blocks[i_c][i_r].get_color():
+					"blue":
+						_text = "0"
+					"green":
+						_text = "1"
+					"pink":
+						_text = "2"
+					"red":
+						_text = "3"
+					"yellow":
+						_text = "4"
+			var _postion := Vector2(i_c*20 + 20, HEIGHT*20 - i_r*20 + 20)
+			draw_string(font, _postion, _text)
 
