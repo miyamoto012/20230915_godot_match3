@@ -124,6 +124,10 @@ func _process(_delta)->void:
 		
 		await transparent_matched_block()
 		delete_matched_block()
+		await fall_blocks()
+		
+		
+		
 
 
 func touch_input()->Mouse_Input:
@@ -206,6 +210,7 @@ func transparent_matched_block()->void:
 				tween.parallel()
 				tween.tween_property(all_blocks[i_c][i_r].color_rect, 'modulate', Color(1, 1, 1, 0), 0.2)
 	tween.play()
+	await tween.finished
 
 
 func delete_matched_block()->void:
@@ -214,4 +219,22 @@ func delete_matched_block()->void:
 			if all_blocks[i_c][i_r] != null && all_blocks[i_c][i_r].get_matched() == true:
 				all_blocks[i_c][i_r].queue_free
 				all_blocks[i_c][i_r] = null
+				
+				
+#削除されて空いた空間に上にあるBlockを下に詰める
+func fall_blocks()->void:
+	var tween := get_tree().create_tween()
+	for i_c in WIDTH:
+		for i_r in HEIGHT:
+			if all_blocks[i_c][i_r] == null && !empty_grids.has(Vector2i(i_c,i_r)):
+				for j_r in range(i_r + 1, HEIGHT):
+					if all_blocks[i_c][j_r] != null:
+						tween.parallel()
+						tween.tween_property(all_blocks[i_c][j_r], 'position', grid_to_pixel(i_c, i_r), 0.2)
+						all_blocks[i_c][i_r] = all_blocks[i_c][j_r]
+						all_blocks[i_c][j_r] = null
+						break
+	tween.play()
+	await tween.finished
+
 
