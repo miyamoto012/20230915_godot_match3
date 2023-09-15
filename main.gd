@@ -118,7 +118,12 @@ func _process(_delta)->void:
 		
 		await swap_blocks(_pressed_grid.x, _pressed_grid.y, direction)
 		
+		if find_matches() == false:
+			await swap_blocks(_pressed_grid.x, _pressed_grid.y, direction)
+			return
 		
+		await transparent_matched_block()
+		delete_matched_block()
 
 
 func touch_input()->Mouse_Input:
@@ -162,9 +167,51 @@ func swap_blocks(column: int, row: int, direction: Vector2i)->void:
 		all_blocks[column + direction.x][row + direction.y] = first_block
 		
 		var tween := get_tree().create_tween()
-		tween.tween_property(first_block, 'position', grid_to_pixel(column + direction.x, row + direction.y), 1)
+		tween.tween_property(first_block, 'position', grid_to_pixel(column + direction.x, row + direction.y), 0.2)
 		tween.parallel()
-		tween.tween_property(other_block, 'position', grid_to_pixel(column, row), 1)
+		tween.tween_property(other_block, 'position', grid_to_pixel(column, row), 0.2)
 		tween.play()
-		
 		await tween.finished
+		
+		
+func find_matches()->bool:
+	var is_matched: bool
+	for i_c in WIDTH:
+		for i_r in HEIGHT:
+			if all_blocks[i_c][i_r] != null:
+				var current_color = all_blocks[i_c][i_r].get_color()
+				if i_c > 0 && i_c < WIDTH -1:
+					if all_blocks[i_c - 1][i_r] != null && all_blocks[i_c + 1][i_r] != null:
+						if all_blocks[i_c - 1][i_r].get_color() == current_color && all_blocks[i_c + 1][i_r].get_color() == current_color:
+							is_matched = true
+							all_blocks[i_c - 1][i_r].set_matched(true)
+							all_blocks[i_c][i_r].set_matched(true)
+							all_blocks[i_c + 1][i_r].set_matched(true)
+				if i_r > 0 && i_r < HEIGHT -1:
+					if all_blocks[i_c][i_r - 1] != null && all_blocks[i_c][i_r + 1] != null:
+						if all_blocks[i_c][i_r - 1].get_color() == current_color && all_blocks[i_c][i_r + 1].get_color() == current_color:
+							is_matched = true							
+							all_blocks[i_c][i_r - 1].set_matched(true)
+							all_blocks[i_c][i_r].set_matched(true)
+							all_blocks[i_c][i_r + 1].set_matched(true)
+	return is_matched
+	
+
+func transparent_matched_block()->void:
+	var tween := get_tree().create_tween()
+	
+	for i_c in WIDTH:
+		for i_r in HEIGHT:
+			if all_blocks[i_c][i_r] != null && all_blocks[i_c][i_r].get_matched() == true:
+				tween.parallel()
+				tween.tween_property(all_blocks[i_c][i_r].color_rect, 'modulate', Color(1, 1, 1, 0), 0.2)
+	tween.play()
+
+
+func delete_matched_block()->void:
+	for i_c in WIDTH:
+		for i_r in HEIGHT:
+			if all_blocks[i_c][i_r] != null && all_blocks[i_c][i_r].get_matched() == true:
+				all_blocks[i_c][i_r].queue_free
+				all_blocks[i_c][i_r] = null
+
