@@ -7,8 +7,9 @@ enum Mouse_Input {
 }
 
 enum GameState {
-	DISPLAY_UPDATE,
-	WAITING_INPUT
+	WAITING_INPUT,
+	IN_PROCESSING,
+	EXIST_MATHCES,
 }
 
 #最大列数
@@ -16,11 +17,12 @@ const WIDTH: int = 7
 #最大行数
 const HEIGHT: int = 7
 
+#ひとマスの大きさ
 const OFFSET: int = 70
+#補充されるブロックの初期位置調整用
 const Y_OFFSET: int = -2
 
 var game_state: GameState = GameState.WAITING_INPUT
-
 
 #Blockを配置しない座標を集めた配列
 var empty_grids: Array[Vector2i] = [
@@ -54,8 +56,8 @@ var _is_press: bool = false
 	preload("res://scenes/block/block_yellow.tscn"),
 ]
 
+#デバッグ用
 var font = preload("res://font/SourceCodePro-Bold.ttf")
-
 
 func _ready()->void:
 	randomize()
@@ -122,31 +124,42 @@ func is_in_grid(grid_position: Vector2i)->bool:
 
 
 func _process(_delta)->void:
-	
 	if game_state == GameState.WAITING_INPUT && touch_input() == Mouse_Input.RELEASE:
-		game_state = GameState.DISPLAY_UPDATE
+		game_state = GameState.IN_PROCESSING
+		
 		var direction := touch_difference(_pressed_grid, _released_grid)
 		queue_redraw()
+		
 		await swap_blocks(_pressed_grid.x, _pressed_grid.y, direction)
 		queue_redraw()
-		if find_matches() == false:
+		
+		if find_matches():
+			game_state = GameState.EXIST_MATHCES
+		else:
 			await swap_blocks(_pressed_grid.x, _pressed_grid.y, direction)
 			game_state = GameState.WAITING_INPUT
 			queue_redraw()
 			return
 
+	if game_state == GameState.EXIST_MATHCES:
+		#実行は一度でいいのですぐに切り替える
+		game_state = GameState.IN_PROCESSING
 		await transparent_matched_block()
 		queue_redraw()
+		
 		delete_matched_block()
+		queue_redraw()
 		
 		await fall_blocks()
 		queue_redraw()
+		
 		await refill_blocks()
 		queue_redraw()
-		game_state = GameState.WAITING_INPUT
 		
-		
-		
+		if find_matches():
+			game_state = GameState.EXIST_MATHCES
+		else:
+			game_state = GameState.WAITING_INPUT
 
 
 func touch_input()->Mouse_Input:
@@ -218,6 +231,7 @@ func find_matches()->bool:
 	return is_matched
 	
 
+#マッチしたブロックの透明度を0にする
 func transparent_matched_block()->void:
 	var tween := create_tween().set_parallel(true)
 	
@@ -256,6 +270,7 @@ func fall_blocks()->void:
 	if need_tween:
 		await tween.finished
 	else:
+		#一度もtween_propertyが実行されないとエラーが出るのを防ぐため
 		tween.kill()
 
 
@@ -281,6 +296,7 @@ func _draw():
 	_draw_blocks()
 
 
+#デバッグ用
 func _draw_blocks()->void:
 	var _text: String = ""
 	for i_c in WIDTH:
